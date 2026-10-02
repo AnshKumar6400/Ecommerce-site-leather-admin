@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 
-const FROM = process.env.ORDER_EMAIL_FROM || "Hidecraft <orders@hidecraft.example>";
-const REPLY_TO = process.env.ORDER_EMAIL_REPLY_TO || "support@hidecraft.example";
+const FROM = process.env.ORDER_EMAIL_FROM || "Malhotra Leather House <orders@malhotraleatherhouse.example>";
+const REPLY_TO = process.env.ORDER_EMAIL_REPLY_TO || "malhotraleatherhouse@gmail.com";
 const STORE_URL = process.env.NEXT_PUBLIC_STORE_URL || "http://localhost:3911";
 
 const money = (paise: number) =>
@@ -113,7 +113,7 @@ function orderConfirmationHtml(order: OrderForEmail, address: Address | null): s
     <tr><td align="center">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#FFFDF9;border-radius:20px;padding:36px 32px">
         <tr><td>
-          <p style="margin:0;font-size:13px;letter-spacing:0.12em;text-transform:uppercase;color:#8A7A65">Hidecraft</p>
+          <p style="margin:0;font-size:13px;letter-spacing:0.12em;text-transform:uppercase;color:#8A7A65">Malhotra Leather House</p>
           <h1 style="margin:10px 0 6px;font-size:26px;color:#3A2E22">Order ${escape(order.number)} confirmed</h1>
           <p style="margin:0 0 26px;font-size:15px;line-height:1.6;color:#8A7A65">
             Thank you — we're getting your order ready. We'll email you again the moment it ships.
@@ -141,7 +141,7 @@ function orderConfirmationHtml(order: OrderForEmail, address: Address | null): s
           </p>
         </td></tr>
       </table>
-      <p style="margin:20px 0 0;font-size:12px;color:#8A7A65">Hidecraft · Handcrafted pure leather, delivered across India</p>
+      <p style="margin:20px 0 0;font-size:12px;color:#8A7A65">Malhotra Leather House · Handcrafted pure leather, delivered across India</p>
     </td></tr>
   </table>
 </body></html>`;

@@ -40,7 +40,7 @@ export async function createOrderFromCart(
 
   const order = await tx.order.create({
     data: {
-      number: `HC-${Date.now().toString().slice(-8)}`,
+      number: `ML-${Date.now().toString().slice(-8)}`,
       customerId: args.customerId,
       subtotal,
       discountCode: couponCode,

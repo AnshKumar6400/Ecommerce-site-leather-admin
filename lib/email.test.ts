@@ -35,8 +35,8 @@ it("sends once and stamps the order as claimed", async () => {
     data: { confirmationSentAt: expect.any(Date) },
   });
   const body = JSON.parse((fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body);
-  expect(body).toMatchObject({ to: ["buyer@example.com"], reply_to: "support@hidecraft.example", subject: "Order MC-1042 confirmed" });
-  expect(body.from).toContain("orders@hidecraft.example");
+  expect(body).toMatchObject({ to: ["buyer@example.com"], reply_to: "malhotraleatherhouse@gmail.com", subject: "Order MC-1042 confirmed" });
+  expect(body.from).toContain("orders@malhotraleatherhouse.example");
   expect(body.text).toContain("₹2,499.00");
   expect(body.text).toContain("12 Marine Drive");
 });

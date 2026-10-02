@@ -159,7 +159,7 @@ const Sidebar = React.forwardRef<
             style={{ "--sidebar-width": SIDEBAR_WIDTH_MOBILE } as React.CSSProperties}
             side={side}
           >
-            <SheetTitle className="sr-only">Hidecraft admin navigation</SheetTitle>
+            <SheetTitle className="sr-only">Malhotra Leather House admin navigation</SheetTitle>
             <SheetDescription className="sr-only">Sidebar</SheetDescription>
             <div className="flex h-full w-full flex-col">{children}</div>
           </SheetContent>

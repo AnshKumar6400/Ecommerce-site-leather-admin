@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
 
       const created = await tx.order.create({
         data: {
-          number: `HM-${Date.now().toString().slice(-8)}`,
+          number: `MM-${Date.now().toString().slice(-8)}`,
           ...(customerId ? { customerId } : { customerName, customerPhone, customerEmail: customerEmail || null }),
           status,
           paymentStatus: paymentStatusFor(amountPaid, subtotal),

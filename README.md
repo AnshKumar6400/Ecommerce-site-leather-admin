@@ -1,6 +1,6 @@
-# Hidecraft Admin
+# Malhotra Leather House — Admin
 
-The commerce authority for the Hidecraft leather-jacket store: jackets, categories, orders, customers, coupons, reviews, and **Customize requests** (bespoke jackets). The storefront lives in `Ecommerce-site-leather`.
+The commerce authority for the Malhotra Leather House store: jackets, categories, orders, customers, coupons, reviews, and **Customize requests** (bespoke jackets). The storefront lives in `Ecommerce-site-leather`.
 
 Forked from the collectibles admin (`Ecommerce-site-admin`) — same architecture (Next.js 15 + Prisma/Postgres + Razorpay + Supabase Storage), re-modelled for jackets.
 
