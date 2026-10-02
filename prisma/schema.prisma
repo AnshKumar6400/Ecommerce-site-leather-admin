@@ -1,0 +1,366 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Only used by `prisma migrate` (needs an unpooled connection on Supabase
+  // and similar). Locally it is the same value as DATABASE_URL.
+  directUrl = env("DIRECT_URL")
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PACKED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+  SIMULATED_PAID
+  FAILED
+}
+
+/* A jacket type shown as a collection tile ("Pure Leather Jackets", "Pure
+   Suede Jackets", "Pure Leather & Suede Coats"). Gender lives on the product,
+   so the same category serves both the Men's and the Women's menus. */
+model Category {
+  id String @id @default(cuid())
+  name String @unique
+  slug String @unique
+  description String?
+  imageUrl String?
+  visible Boolean @default(true)
+  products Product[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Product {
+  id String @id @default(cuid())
+  sku String @unique
+  slug String @unique
+  name String
+  description String
+  /* Money is stored in paise (1/100 rupee), like every other amount here. */
+  price Int
+  compareAtPrice Int?
+  cost Int
+  stockQuantity Int @default(0)
+  imageUrl String?
+  hoverImageUrl String?
+  images String[] @default([])
+  visible Boolean @default(true)
+  /* New Releases shelf on the homepage. */
+  featured Boolean @default(false)
+  /* Bestsellers shelf on the homepage. */
+  bestseller Boolean @default(false)
+  /* The small-caps line under the name on a card: "NAPPA LEATHER", "NAPPA SUEDE". */
+  material String @default("NAPPA LEATHER")
+  /* MEN | WOMEN | UNISEX — drives the storefront's Men / Women menus. */
+  gender String @default("MEN")
+  /* Offered swatches and sizes. Colour is a plain name ("Brown"); the
+     storefront maps known names to a swatch colour. */
+  colors String[] @default([])
+  sizes String[] @default(["S", "M", "L", "XL", "XXL"])
+  /* Crafted after purchase, so stockQuantity is not enforced for this jacket. */
+  madeToOrder Boolean @default(true)
+  wishlistItems WishlistItem[]
+  conversations Conversation[]
+  categoryId String
+  category Category @relation(fields: [categoryId], references: [id])
+  cartItems CartItem[]
+  orderItems OrderItem[]
+  adjustments InventoryAdjustment[]
+  reviews Review[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum ReviewStatus {
+  PUBLISHED
+  HIDDEN
+}
+
+/* One review per customer per product (a second submission edits the first).
+   Reviews go live immediately; the admin can HIDE one after the fact.
+   `verifiedPurchase` is stamped at write time from the customer's orders. */
+model Review {
+  id String @id @default(cuid())
+  productId String
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  customerId String
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  rating Int
+  title String?
+  body String
+  verifiedPurchase Boolean @default(false)
+  status ReviewStatus @default(PUBLISHED)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([productId, customerId])
+  @@index([productId, status, createdAt])
+}
+
+model Customer {
+  id String @id @default(cuid())
+  name String
+  email String @unique
+  /* Null for accounts created through Google: "no password", not "any password". */
+  passwordHash String?
+  googleId String? @unique
+  phone String?
+  imageUrl String?
+  addresses Address[]
+  cart Cart?
+  orders Order[]
+  wishlist Wishlist?
+  conversations Conversation[]
+  paymentIntents PaymentIntent[]
+  reviews Review[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Address {
+  id String @id @default(cuid())
+  customerId String
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  recipient String
+  phone String
+  line1 String
+  line2 String?
+  city String
+  state String
+  postalCode String
+  country String @default("India")
+  isDefault Boolean @default(false)
+  createdAt DateTime @default(now())
+}
+
+model Cart {
+  id String @id @default(cuid())
+  customerId String @unique
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items CartItem[]
+  updatedAt DateTime @updatedAt
+}
+
+model CartItem {
+  id String @id @default(cuid())
+  cartId String
+  productId String
+  cart Cart @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+  quantity Int
+  /* The buyer's choices for this line. Empty string (not null) so the compound
+     unique works: the same jacket in two sizes or colours is two lines. */
+  size String @default("")
+  color String @default("")
+  /* Free text for the tailor: monogram, sleeve length, fit changes. */
+  note String?
+  @@unique([cartId, productId, size, color])
+}
+
+model Order {
+  id String @id @default(cuid())
+  number String @unique
+  // Nullable so a walk-in sale isn't forced through a registered account;
+  // customerName/customerPhone carry the walk-in's details when null.
+  customerId String?
+  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customerName String?
+  customerPhone String?
+  customerEmail String?
+  status OrderStatus @default(PENDING)
+  paymentStatus PaymentStatus @default(PENDING)
+  subtotal Int
+  shipping Int @default(0)
+  discountCode String?
+  discountAmount Int @default(0)
+  total Int
+  // Cumulative payments recorded so far, kept in sync with the Payment log.
+  amountPaid Int @default(0)
+  payments Payment[]
+  addressSnapshot Json?
+  carrier String?
+  trackingCode String?
+  deliveryNotes String?
+  /* Stamped when a confirmation email is CLAIMED, so the COD route, the
+     Razorpay verify route and the webhook can't send it twice. */
+  confirmationSentAt DateTime?
+  items OrderItem[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model OrderItem {
+  id String @id @default(cuid())
+  orderId String
+  productId String
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+  name String
+  sku String
+  unitPrice Int
+  quantity Int
+  size String @default("")
+  color String @default("")
+  note String?
+}
+
+/** One record per payment collected against an order. */
+model Payment {
+  id String @id @default(cuid())
+  orderId String
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount Int
+  method String?
+  note String?
+  recordedAt DateTime @default(now())
+}
+
+/** One row per Razorpay order quoted; claimed atomically by whichever of the
+ * client verify call or the payment.captured webhook arrives first. */
+model PaymentIntent {
+  id String @id @default(cuid())
+  razorpayOrderId String @unique
+  customerId String
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  addressId String
+  amount Int
+  discountCode String?
+  discountAmount Int @default(0)
+  status String @default("CREATED") // CREATED | FULFILLED
+  orderId String?
+  createdAt DateTime @default(now())
+}
+
+/** Percent-off or flat-off codes. `value` is a whole percent for PERCENT, or paise for FIXED. */
+model Coupon {
+  id String @id @default(cuid())
+  code String @unique
+  type String // "PERCENT" | "FIXED"
+  value Int
+  active Boolean @default(true)
+  maxUses Int?
+  usedCount Int @default(0)
+  expiresAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model InventoryAdjustment {
+  id String @id @default(cuid())
+  productId String
+  product Product @relation(fields: [productId], references: [id])
+  delta Int
+  resultingQuantity Int
+  reason String
+  adminEmail String
+  createdAt DateTime @default(now())
+}
+
+model Wishlist {
+  id String @id @default(cuid())
+  customerId String @unique
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items WishlistItem[]
+  updatedAt DateTime @updatedAt
+}
+
+model WishlistItem {
+  id String @id @default(cuid())
+  wishlistId String
+  wishlist Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  productId String
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@unique([wishlistId, productId])
+}
+
+enum ConversationStatus {
+  OPEN
+  CLOSED
+}
+
+enum MessageSender {
+  CUSTOMER
+  ADMIN
+}
+
+/* GENERAL: an ordinary question. PRODUCT: asked from a product page.
+   CUSTOM: a "Customize" request — a bespoke jacket, with its structured spec
+   in customSpec. This replaces the ISO ("in search of") finder that the
+   collectibles shop had: same chat thread underneath, but the request now
+   carries a spec the tailor can quote against. */
+enum ConversationKind {
+  GENERAL
+  PRODUCT
+  CUSTOM
+}
+
+/* Where a CUSTOM request is in its life, set by the admin. */
+enum CustomStage {
+  NEW
+  QUOTED
+  CONFIRMED
+  IN_PRODUCTION
+  SHIPPED
+  DECLINED
+}
+
+model Conversation {
+  id String @id @default(cuid())
+  customerId String
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  productId String?
+  product Product? @relation(fields: [productId], references: [id])
+  kind ConversationKind @default(GENERAL)
+  /* { jacketType, gender, material, color, size, measurements, lining,
+       monogram, notes, referenceImages[] } — validated on write (lib/custom.ts). */
+  customSpec Json?
+  customStage CustomStage?
+  /* Quote in paise, set by the admin once the design is priced. */
+  quotedPrice Int?
+  status ConversationStatus @default(OPEN)
+  lastMessageAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  messages Message[]
+}
+
+model Message {
+  id String @id @default(cuid())
+  conversationId String
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender MessageSender
+  body String
+  /* A Storage URL in the chat-images bucket. Optional and independent of
+     `body`: a message may be text, an image, or both — never neither. */
+  imageUrl String?
+  readByCustomer Boolean @default(false)
+  readByAdmin Boolean @default(false)
+  createdAt DateTime @default(now())
+}
+
+/* Store-wide settings the shop owner can change without a deploy. A single
+   row pinned to id "store"; reads upsert it into existence. */
+model StoreSettings {
+  id String @id @default("store")
+  accentColor String @default("#FFFFFF")
+  /* The scrolling strip under the header. Blank hides it. */
+  announcementText String @default("Limited period offer: Extra 10% off on all prepaid orders! Ends soon.")
+  tagline String @default("Handcrafted for you")
+  supportPhone String @default("")
+  supportEmail String @default("")
+  whatsappUrl String @default("")
+  heroImageUrl String?
+  heroImageMobileUrl String?
+  updatedAt DateTime @updatedAt
+}

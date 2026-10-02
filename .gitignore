@@ -1,0 +1,12 @@
+.worktrees/
+node_modules/
+.next/
+.env
+.env.local
+generated/
+tsconfig.tsbuildinfo
+
+.vercel
+.env*
+prod.env
+!.env.example

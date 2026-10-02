@@ -1,0 +1,518 @@
+"use client";
+
+import * as React from "react";
+import { Plus } from "lucide-react";
+
+import { adminFetch } from "@/lib/adminApi";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ImageField } from "@/components/admin/ImageField";
+import { GalleryField } from "@/components/admin/GalleryField";
+import { QuickCategoryDialog } from "@/components/admin/QuickCategoryDialog";
+import type { Category, Product } from "@/components/admin/types";
+import { useAdminResource } from "@/components/admin/useAdminResource";
+
+const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+
+type Draft = {
+  name: string;
+  sku: string;
+  slug: string;
+  description: string;
+  price: string;
+  compareAtPrice: string;
+  cost: string;
+  stockQuantity: string;
+  categoryId: string;
+  imageUrl: string;
+  hoverImageUrl: string;
+  visible: boolean;
+  featured: boolean;
+  images: string[];
+  bestseller: boolean;
+  madeToOrder: boolean;
+  material: string;
+  gender: string;
+  /* Comma-separated in the form, stored as string[]. */
+  colors: string;
+  sizes: string;
+};
+
+const MATERIALS = ["NAPPA LEATHER", "NAPPA SUEDE", "NAPPA LEATHER & SUEDE"] as const;
+const GENDERS = [
+  { value: "MEN", label: "Men" },
+  { value: "WOMEN", label: "Women" },
+  { value: "UNISEX", label: "Unisex" },
+] as const;
+const DEFAULT_SIZES = "S, M, L, XL, XXL";
+
+const splitList = (value: string) => value.split(",").map((part) => part.trim()).filter(Boolean);
+
+function draftFrom(product: Product | null, categories: Category[]): Draft {
+  if (!product) {
+    return {
+      name: "",
+      sku: "",
+      slug: "",
+      description: "",
+      price: "",
+      compareAtPrice: "",
+      cost: "",
+      stockQuantity: "0",
+      categoryId: categories[0]?.id ?? "",
+      imageUrl: "",
+      hoverImageUrl: "",
+      visible: false,
+      featured: false,
+      images: [],
+      bestseller: false,
+      madeToOrder: true,
+      material: "NAPPA LEATHER",
+      gender: "MEN",
+      colors: "",
+      sizes: DEFAULT_SIZES,
+    };
+  }
+  return {
+    name: product.name,
+    sku: product.sku,
+    slug: product.slug,
+    description: product.description,
+    price: (product.price / 100).toString(),
+    compareAtPrice: product.compareAtPrice !== null ? (product.compareAtPrice / 100).toString() : "",
+    cost: (product.cost / 100).toString(),
+    stockQuantity: product.stockQuantity.toString(),
+    categoryId: product.categoryId,
+    imageUrl: product.imageUrl ?? "",
+    hoverImageUrl: product.hoverImageUrl ?? "",
+    visible: product.visible,
+    featured: product.featured ?? false,
+    images: product.images ?? [],
+    bestseller: product.bestseller ?? false,
+    madeToOrder: product.madeToOrder ?? true,
+    material: product.material ?? "NAPPA LEATHER",
+    gender: product.gender ?? "MEN",
+    colors: (product.colors ?? []).join(", "),
+    sizes: (product.sizes ?? []).join(", "),
+  };
+}
+
+export function ProductDialog({
+  open,
+  onOpenChange,
+  product,
+  categories,
+  onCategoryCreated,
+  onSaved,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  product: Product | null;
+  categories: Category[];
+  onCategoryCreated?: () => void;
+  onSaved: (message: string) => void;
+}) {
+  const [draft, setDraft] = React.useState<Draft>(() => draftFrom(product, categories));
+  const [error, setError] = React.useState<string | null>(null);
+  const [saving, setSaving] = React.useState(false);
+  const [quickCategoryOpen, setQuickCategoryOpen] = React.useState(false);
+  const [extraCategories, setExtraCategories] = React.useState<Category[]>([]);
+  const categoryOptions = React.useMemo(
+    () => [...categories, ...extraCategories.filter((extra) => !categories.some((category) => category.id === extra.id))],
+    [categories, extraCategories],
+  );
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  React.useEffect(() => {
+    if (open) {
+      setDraft(draftFrom(product, categories));
+      setError(null);
+      setExtraCategories([]);
+    }
+  }, [open, product]);
+
+  const set = <K extends keyof Draft>(key: K, value: Draft[K]) =>
+    setDraft((current) => ({ ...current, [key]: value }));
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSaving(true);
+    setError(null);
+
+    const slug = draft.slug.trim() || slugify(draft.name);
+    const payload: Record<string, unknown> = {
+      name: draft.name.trim(),
+      slug,
+      description: draft.description.trim(),
+      price: Math.round(Number(draft.price || 0) * 100),
+      cost: Math.round(Number(draft.cost || 0) * 100),
+      stockQuantity: Number(draft.stockQuantity || 0),
+      categoryId: draft.categoryId,
+      visible: draft.visible,
+      featured: draft.featured,
+      images: draft.images,
+      bestseller: draft.bestseller,
+      madeToOrder: draft.madeToOrder,
+      material: draft.material,
+      gender: draft.gender,
+      colors: splitList(draft.colors),
+      sizes: splitList(draft.sizes),
+    };
+    if (draft.compareAtPrice.trim()) payload.compareAtPrice = Math.round(Number(draft.compareAtPrice) * 100);
+    else if (product) payload.compareAtPrice = null;
+    if (draft.imageUrl.trim()) payload.imageUrl = draft.imageUrl.trim();
+    if (draft.hoverImageUrl.trim()) payload.hoverImageUrl = draft.hoverImageUrl.trim();
+    else if (product) payload.hoverImageUrl = null;
+
+    try {
+      if (product) {
+        await adminFetch(`/api/admin/products/${product.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
+        onSaved(`${payload.name} was updated.`);
+      } else {
+        await adminFetch("/api/admin/products", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+        onSaved(`${payload.name} was added to the catalog.`);
+      }
+      onOpenChange(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Could not save that product.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{product ? "Edit jacket" : "Add jacket"}</DialogTitle>
+          <DialogDescription>
+            {product
+              ? "Changes go live on the storefront as soon as you save."
+              : "New jackets start hidden: tick visible when you're ready to launch."}
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={submit} className="grid gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Name" htmlFor="product-name" required>
+              <Input
+                id="product-name"
+                required
+                minLength={2}
+                value={draft.name}
+                onChange={(event) => {
+                  const name = event.target.value;
+                  setDraft((current) => ({
+                    ...current,
+                    name,
+                    slug: current.slug === slugify(current.name) ? slugify(name) : current.slug,
+                  }));
+                }}
+                placeholder="Boston Jacket"
+              />
+            </Field>
+            <Field label="Category" htmlFor="product-category">
+              <div className="flex gap-1.5">
+                <Select value={draft.categoryId} onValueChange={(value) => value && set("categoryId", value)}>
+                  <SelectTrigger id="product-category">
+                    <SelectValue placeholder="Choose a category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categoryOptions.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Quick add category"
+                  title="Quick add category"
+                  onClick={() => setQuickCategoryOpen(true)}
+                >
+                  <Plus className="size-4" />
+                </Button>
+              </div>
+            </Field>
+            <Field
+              label="SKU"
+              htmlFor="product-sku"
+              hint={product ? "Generated when the product was created — never changes." : "Generated from the name once you save — e.g. \"Boston Jacket\" becomes BOSTON-1."}
+            >
+              <Input id="product-sku" readOnly disabled value={product ? draft.sku : "Generated automatically"} />
+            </Field>
+            <Field label="Slug" htmlFor="product-slug" required>
+              <Input
+                id="product-slug"
+                required
+                minLength={2}
+                value={draft.slug}
+                onChange={(event) => set("slug", event.target.value)}
+                placeholder="boston-jacket"
+              />
+            </Field>
+          </div>
+
+          <Field
+            label="Description"
+            htmlFor="product-description"
+            hint="At least 10 characters — this is the storefront copy."
+            required
+          >
+            <textarea
+              id="product-description"
+              required
+              minLength={10}
+              rows={3}
+              value={draft.description}
+              onChange={(event) => set("description", event.target.value)}
+              className="flex w-full rounded-md border border-input bg-card px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              placeholder="Handcrafted in pure nappa leather with inner pockets on both sides."
+            />
+          </Field>
+
+          <div className="grid gap-4 sm:grid-cols-4">
+            <Field label="Price (₹)" htmlFor="product-price" required>
+              <Input
+                id="product-price"
+                required
+                type="number"
+                min="0"
+                step="0.01"
+                value={draft.price}
+                onChange={(event) => set("price", event.target.value)}
+              />
+            </Field>
+            <Field label="Compare-at (₹)" htmlFor="product-compare-at">
+              <Input
+                id="product-compare-at"
+                type="number"
+                min="0"
+                step="0.01"
+                value={draft.compareAtPrice}
+                onChange={(event) => set("compareAtPrice", event.target.value)}
+                placeholder="Optional"
+              />
+            </Field>
+            <Field label="Cost (₹)" htmlFor="product-cost" required>
+              <Input
+                id="product-cost"
+                required
+                type="number"
+                min="0"
+                step="0.01"
+                value={draft.cost}
+                onChange={(event) => set("cost", event.target.value)}
+              />
+            </Field>
+            <Field label="Stock" htmlFor="product-stock" required>
+              <Input
+                id="product-stock"
+                required
+                type="number"
+                min="0"
+                step="1"
+                value={draft.stockQuantity}
+                onChange={(event) => set("stockQuantity", event.target.value)}
+              />
+            </Field>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label="Material" htmlFor="product-material" hint="The small-caps line under the name on a card.">
+              <Select value={draft.material} onValueChange={(value) => value && set("material", value)}>
+                <SelectTrigger id="product-material">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {MATERIALS.map((material) => (
+                    <SelectItem key={material} value={material}>{material}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="For" htmlFor="product-gender" hint="Decides whether it appears under Men, Women or both.">
+              <Select value={draft.gender} onValueChange={(value) => value && set("gender", value)}>
+                <SelectTrigger id="product-gender">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {GENDERS.map((gender) => (
+                    <SelectItem key={gender.value} value={gender.value}>{gender.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Availability" htmlFor="product-made-to-order" hint="Made to order ignores the stock count.">
+              <label className="flex h-9 cursor-pointer items-center gap-2 rounded-md border border-input px-3 text-sm">
+                <input
+                  id="product-made-to-order"
+                  type="checkbox"
+                  checked={draft.madeToOrder}
+                  onChange={(event) => set("madeToOrder", event.target.checked)}
+                  className="size-4 accent-[hsl(var(--primary))]"
+                />
+                Made to order
+              </label>
+            </Field>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Colours" htmlFor="product-colors" hint="Comma-separated — each becomes a swatch (Brown, Black, Tan…).">
+              <Input
+                id="product-colors"
+                value={draft.colors}
+                onChange={(event) => set("colors", event.target.value)}
+                placeholder="Brown, Black, Tan"
+              />
+            </Field>
+            <Field label="Sizes" htmlFor="product-sizes" hint="Comma-separated. Leave empty for one-size.">
+              <Input
+                id="product-sizes"
+                value={draft.sizes}
+                onChange={(event) => set("sizes", event.target.value)}
+                placeholder={DEFAULT_SIZES}
+              />
+            </Field>
+          </div>
+
+          <ImageField
+            id="product-image"
+            label="Image"
+            value={draft.imageUrl}
+            onChange={(url) => set("imageUrl", url)}
+            hint={product ? "Leave blank to keep the current image." : undefined}
+          />
+
+          <ImageField
+            id="product-hover-image"
+            label="Hover image"
+            value={draft.hoverImageUrl}
+            onChange={(url) => set("hoverImageUrl", url)}
+            hint="Shown on crossfade when a shopper hovers the card — optional."
+          />
+
+          <GalleryField value={draft.images} onChange={(images) => set("images", images)} />
+
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-input p-3 transition-colors hover:bg-accent">
+            <input
+              type="checkbox"
+              checked={draft.featured}
+              onChange={(event) => set("featured", event.target.checked)}
+              className="mt-0.5 size-4 accent-[hsl(var(--primary))]"
+            />
+            <span className="grid gap-0.5">
+              <span className="text-sm font-medium text-foreground">Show under New Releases</span>
+              <span className="text-xs text-muted-foreground">
+                Puts this jacket in the New Releases row on the homepage.
+              </span>
+            </span>
+          </label>
+
+          <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-input p-3 transition-colors hover:bg-accent">
+            <input
+              type="checkbox"
+              checked={draft.bestseller}
+              onChange={(event) => set("bestseller", event.target.checked)}
+              className="mt-0.5 size-4 accent-[hsl(var(--primary))]"
+            />
+            <span className="grid gap-0.5">
+              <span className="text-sm font-medium text-foreground">Show under Bestsellers</span>
+              <span className="text-xs text-muted-foreground">
+                Puts this jacket in the Bestsellers row on the homepage.
+              </span>
+            </span>
+          </label>
+
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={draft.visible}
+              onChange={(event) => set("visible", event.target.checked)}
+              className="size-4 accent-[hsl(var(--primary))]"
+            />
+            Visible on the storefront
+          </label>
+
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={saving || !draft.categoryId}>
+              {saving ? "Saving…" : product ? "Save changes" : "Add jacket"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+
+      <QuickCategoryDialog
+        open={quickCategoryOpen}
+        onOpenChange={setQuickCategoryOpen}
+        onCreated={(category) => {
+          setExtraCategories((current) => [...current, category]);
+          set("categoryId", category.id);
+          onCategoryCreated?.();
+        }}
+      />
+    </Dialog>
+  );
+}
+
+function Field({
+  label,
+  htmlFor,
+  hint,
+  required,
+  children,
+}: {
+  label: string;
+  htmlFor: string;
+  hint?: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="grid gap-1.5">
+      <Label htmlFor={htmlFor}>
+        {label} {required && <span className="text-destructive">*</span>}
+      </Label>
+      {children}
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
