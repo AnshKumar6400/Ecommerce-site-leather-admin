@@ -15,6 +15,6 @@ it("rejects a non-http image link and more than five photos", () => {
 });
 
 it("summarises the spec as the first chat bubble", () => {
-  const text = specSummary(customSpec.parse({ jacketType: "Biker", color: "Oxblood", size: "M", notes: "Slim sleeves" }));
-  expect(text.split("\n")).toEqual(["Custom jacket request", "Jacket Type: Biker", "Color: Oxblood", "Size: M", "Notes: Slim sleeves"]);
+  const text = specSummary(customSpec.parse({ jacketType: "Biker", gender: "WOMEN", color: "Oxblood", size: "M", notes: "Slim sleeves" }));
+  expect(text.split("\n")).toEqual(["Custom jacket request", "Jacket type: Biker", "For: Women", "Colour: Oxblood", "Size: M", "Notes: Slim sleeves"]);
 });

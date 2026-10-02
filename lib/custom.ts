@@ -28,14 +28,16 @@ export const hasSubstance = (spec: CustomSpec) => Boolean(spec.jacketType || spe
 
 export const CUSTOM_STAGES = ["NEW", "QUOTED", "CONFIRMED", "IN_PRODUCTION", "SHIPPED", "DECLINED"] as const;
 
-const label = (key: string) => key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
+const LABELS: Record<string, string> = { jacketType: "Jacket type", gender: "For", color: "Colour" };
+const label = (key: string) => LABELS[key] ?? key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase());
+const show = (key: string, value: string) => (key === "gender" ? value.charAt(0) + value.slice(1).toLowerCase() : value);
 
 /* The first chat bubble for a custom request, so the thread reads on its own
    even in an inbox view that doesn't know about customSpec. */
 export function specSummary(spec: CustomSpec): string {
   const lines = (Object.entries(spec) as [string, unknown][])
     .filter(([key, value]) => key !== "referenceImages" && key !== "notes" && typeof value === "string" && value)
-    .map(([key, value]) => `${label(key)}: ${value}`);
+    .map(([key, value]) => `${label(key)}: ${show(key, value as string)}`);
   if (spec.notes) lines.push(`Notes: ${spec.notes}`);
   return ["Custom jacket request", ...lines].join("\n");
 }
