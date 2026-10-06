@@ -58,7 +58,7 @@ type Draft = {
   sizes: string;
 };
 
-const MATERIALS = ["NAPPA LEATHER", "NAPPA SUEDE", "NAPPA LEATHER & SUEDE"] as const;
+const MATERIALS = ["NAPPA LEATHER", "NAPPA SUEDE", "NAPPA LEATHER & SUEDE", "REAL LEATHER", "CRUNCH LEATHER"] as const;
 const GENDERS = [
   { value: "MEN", label: "Men" },
   { value: "WOMEN", label: "Women" },

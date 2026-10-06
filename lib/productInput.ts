@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const GENDERS = ["MEN", "WOMEN", "UNISEX"] as const;
-export const MATERIALS = ["NAPPA LEATHER", "NAPPA SUEDE", "NAPPA LEATHER & SUEDE"] as const;
+export const MATERIALS = ["NAPPA LEATHER", "NAPPA SUEDE", "NAPPA LEATHER & SUEDE", "REAL LEATHER", "CRUNCH LEATHER"] as const;
 
 const names = (max: number) => z.array(z.string().trim().min(1).max(max)).max(24);
 
